@@ -110,17 +110,13 @@ client.on('interactionCreate', async interaction => {
 
       raids.set(raidId, raid);
 
-      const message = await interaction.channel.send({
-        embeds: [makeEmbed(raid)],
-        components: [makeButtons(raidId)]
-      });
+     await interaction.reply({
+  embeds: [makeEmbed(raid)],
+  components: [makeButtons(raidId)]
+});
 
-      raid.messageId = message.id;
-
-      await interaction.reply({
-        content: '✅ 모집글 생성 완료',
-        ephemeral: true
-      });
+const message = await interaction.fetchReply();
+raid.messageId = message.id;
     }
     return;
   }
