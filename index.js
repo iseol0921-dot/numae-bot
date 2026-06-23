@@ -49,9 +49,9 @@ client.once('ready', async () => {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
   await rest.put(
-    Routes.applicationCommands(client.user.id),
-    { body: commands }
-  );
+  Routes.applicationGuildCommands(client.user.id, '1519109990101815386'),
+  { body: commands }
+);
 
   console.log('슬래시 명령어 등록 완료!');
 });
