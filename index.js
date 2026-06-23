@@ -13,31 +13,34 @@ import {
   EmbedBuilder
 } from 'discord.js';
 
+import fs from 'fs';
+
 const SERVER_ID = '1519109990101815386';
+const DATA_FILE = './data.json';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-const raids = new Map();
+function loadData() {
+  if (!fs.existsSync(DATA_FILE)) {
+    return { raids: {} };
+  }
 
-const commands = [
-  new SlashCommandBuilder()
-    .setName('모집생성')
-    .setDescription('공대 모집글 생성')
-    .addStringOption(o =>
-      o.setName('보스').setDescription('예: 혼텔, 카텔, 핑빈, 카쿰').setRequired(true)
-    )
-    .addStringOption(o =>
-      o.setName('날짜').setDescription('예: 6/24(수)').setRequired(true)
-    )
-    .addStringOption(o =>
-      o.setName('시간').setDescription('예: 22시').setRequired(true)
-    )
-    .addIntegerOption(o =>
-      o.setName('정원').setDescription('모집 기준 인원').setRequired(true)
-    )
-].map(c => c.toJSON());
+  try {
+    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  } catch {
+    return { raids: {} };
+  }
+}
+
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
+
+function getData() {
+  return loadData();
+}
 
 function makeEmbed(raid) {
   const list = raid.members.length
@@ -69,8 +72,30 @@ function makeButtons(raidId) {
   );
 }
 
+const commands = [
+  new SlashCommandBuilder()
+    .setName('모집생성')
+    .setDescription('공대 모집글 생성')
+    .addStringOption(o =>
+      o.setName('보스').setDescription('예: 혼텔, 카텔, 핑빈, 카쿰').setRequired(true)
+    )
+    .addStringOption(o =>
+      o.setName('날짜').setDescription('예: 6/24(수)').setRequired(true)
+    )
+    .addStringOption(o =>
+      o.setName('시간').setDescription('예: 22시').setRequired(true)
+    )
+    .addIntegerOption(o =>
+      o.setName('정원').setDescription('모집 기준 인원').setRequired(true)
+    )
+].map(c => c.toJSON());
+
 client.once('ready', async () => {
   console.log(`${client.user.tag} 로그인 완료!`);
+
+  if (!fs.existsSync(DATA_FILE)) {
+    saveData({ raids: {} });
+  }
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
@@ -105,25 +130,31 @@ client.on('interactionCreate', async interaction => {
         limit,
         messageId: null,
         channelId: interaction.channelId,
+        createdBy: interaction.user.id,
         members: []
       };
 
-      raids.set(raidId, raid);
+      await interaction.reply({
+        embeds: [makeEmbed(raid)],
+        components: [makeButtons(raidId)]
+      });
 
-     await interaction.reply({
-  embeds: [makeEmbed(raid)],
-  components: [makeButtons(raidId)]
-});
+      const message = await interaction.fetchReply();
+      raid.messageId = message.id;
 
-const message = await interaction.fetchReply();
-raid.messageId = message.id;
+      const data = getData();
+      data.raids[raidId] = raid;
+      saveData(data);
     }
+
     return;
   }
 
   if (interaction.isButton()) {
     const [action, raidId] = interaction.customId.split(':');
-    const raid = raids.get(raidId);
+
+    const data = getData();
+    const raid = data.raids[raidId];
 
     if (!raid) {
       await interaction.reply({
@@ -163,6 +194,7 @@ raid.messageId = message.id;
       );
 
       await interaction.showModal(modal);
+      return;
     }
 
     if (action === 'cancel') {
@@ -177,6 +209,8 @@ raid.messageId = message.id;
       }
 
       raid.members.splice(index, 1);
+      data.raids[raidId] = raid;
+      saveData(data);
 
       const msg = await interaction.channel.messages.fetch(raid.messageId);
       await msg.edit({
@@ -188,6 +222,7 @@ raid.messageId = message.id;
         content: '✅ 신청 취소 완료',
         ephemeral: true
       });
+      return;
     }
 
     if (action === 'list') {
@@ -199,15 +234,16 @@ raid.messageId = message.id;
         content: `📋 ${raid.boss} 신청 명단\n\n${list}\n\n총 ${raid.members.length}명`,
         ephemeral: true
       });
+      return;
     }
-    return;
   }
 
   if (interaction.isModalSubmit()) {
     const [action, raidId] = interaction.customId.split(':');
     if (action !== 'modal_join') return;
 
-    const raid = raids.get(raidId);
+    const data = getData();
+    const raid = data.raids[raidId];
 
     if (!raid) {
       await interaction.reply({
@@ -237,6 +273,9 @@ raid.messageId = message.id;
       job,
       level
     });
+
+    data.raids[raidId] = raid;
+    saveData(data);
 
     const msg = await interaction.channel.messages.fetch(raid.messageId);
     await msg.edit({
