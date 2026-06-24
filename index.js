@@ -23,9 +23,7 @@ const client = new Client({
 });
 
 function loadData() {
-  if (!fs.existsSync(DATA_FILE)) {
-    return { raids: {} };
-  }
+  if (!fs.existsSync(DATA_FILE)) return { raids: {} };
 
   try {
     return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
@@ -38,10 +36,6 @@ function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
-function getData() {
-  return loadData();
-}
-
 function makeEmbed(raid) {
   const list = raid.members.length
     ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
@@ -49,9 +43,7 @@ function makeEmbed(raid) {
 
   return new EmbedBuilder()
     .setTitle(`🐍 ${raid.boss} ${raid.date} ${raid.time}`)
-    .setDescription(
-      `현재 신청 인원: **${raid.members.length} / ${raid.limit}명**\n\n${list}`
-    )
+    .setDescription(`현재 신청 인원: **${raid.members.length} / ${raid.limit}명**\n\n${list}`)
     .setColor(0x7c5cff);
 }
 
@@ -114,49 +106,47 @@ client.once('ready', async () => {
 
 client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === '모집생성') {
-      const boss = interaction.options.getString('보스');
-      const date = interaction.options.getString('날짜');
-      const time = interaction.options.getString('시간');
-      const limit = interaction.options.getInteger('정원');
+    if (interaction.commandName !== '모집생성') return;
 
-      const raidId = `${Date.now()}`;
+    const boss = interaction.options.getString('보스');
+    const date = interaction.options.getString('날짜');
+    const time = interaction.options.getString('시간');
+    const limit = interaction.options.getInteger('정원');
+    const raidId = `${Date.now()}`;
 
-      const raid = {
-        id: raidId,
-        boss,
-        date,
-        time,
-        limit,
-        messageId: null,
-        channelId: interaction.channelId,
-        createdBy: interaction.user.id,
-        members: []
-      };
+    const raid = {
+      id: raidId,
+      boss,
+      date,
+      time,
+      limit,
+      messageId: null,
+      channelId: interaction.channelId,
+      createdBy: interaction.user.id,
+      members: []
+    };
 
-    const data = getData();
-data.raids[raidId] = raid;
-saveData(data);
+    const data = loadData();
+    data.raids[raidId] = raid;
+    saveData(data);
 
-await interaction.reply({
-  embeds: [makeEmbed(raid)],
-  components: [makeButtons(raidId)]
-});
+    await interaction.reply({
+      embeds: [makeEmbed(raid)],
+      components: [makeButtons(raidId)]
+    });
 
-const message = await interaction.fetchReply();
-raid.messageId = message.id;
+    const message = await interaction.fetchReply();
+    raid.messageId = message.id;
 
-data.raids[raidId] = raid;
-saveData(data);
-    }
-
+    data.raids[raidId] = raid;
+    saveData(data);
     return;
   }
 
   if (interaction.isButton()) {
     const [action, raidId] = interaction.customId.split(':');
 
-    const data = getData();
+    const data = loadData();
     const raid = data.raids[raidId];
 
     if (!raid) {
@@ -215,10 +205,9 @@ saveData(data);
       data.raids[raidId] = raid;
       saveData(data);
 
-     await interaction.message.edit({
-  embeds: [makeEmbed(raid)],
-  components: [makeButtons(raidId)]
-});
+      await interaction.message.edit({
+        embeds: [makeEmbed(raid)],
+        components: [makeButtons(raidId)]
       });
 
       await interaction.reply({
@@ -245,7 +234,7 @@ saveData(data);
     const [action, raidId] = interaction.customId.split(':');
     if (action !== 'modal_join') return;
 
-    const data = getData();
+    const data = loadData();
     const raid = data.raids[raidId];
 
     if (!raid) {
@@ -280,8 +269,7 @@ saveData(data);
     data.raids[raidId] = raid;
     saveData(data);
 
-    const msg = await interaction.channel.messages.fetch(raid.messageId);
-    await msg.edit({
+    await interaction.message.edit({
       embeds: [makeEmbed(raid)],
       components: [makeButtons(raidId)]
     });
