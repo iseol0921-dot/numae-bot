@@ -134,17 +134,20 @@ client.on('interactionCreate', async interaction => {
         members: []
       };
 
-      await interaction.reply({
-        embeds: [makeEmbed(raid)],
-        components: [makeButtons(raidId)]
-      });
+    const data = getData();
+data.raids[raidId] = raid;
+saveData(data);
 
-      const message = await interaction.fetchReply();
-      raid.messageId = message.id;
+await interaction.reply({
+  embeds: [makeEmbed(raid)],
+  components: [makeButtons(raidId)]
+});
 
-      const data = getData();
-      data.raids[raidId] = raid;
-      saveData(data);
+const message = await interaction.fetchReply();
+raid.messageId = message.id;
+
+data.raids[raidId] = raid;
+saveData(data);
     }
 
     return;
