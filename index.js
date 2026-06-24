@@ -159,13 +159,12 @@ const finalPerPerson = perPersonShare - parcelFeeShare;
     `공대원 할인율: ${discount}%\n` +
     `할인 적용 구매금액: ${formatMesos(buyerFinalTotal)} 메소\n\n` +
     `총 정산금: ${formatMesos(totalPool)} 메소\n` +
-    `분배 인원: ${people}명\n\n` +
-   1인 기본 분배금: ${formatMesos(perPersonShare)} 메소
-택배 1건 수수료: ${formatMesos(parcelFeePerSend)} 메소
-총 택배 수수료: ${formatMesos(totalParcelFee)} 메소
-1인당 택배비 부담: ${formatMesos(parcelFeeShare)} 메소
-
-최종 1인 분배금: ${formatMesos(finalPerPerson)} 메소
+       `분배 인원: ${people}명\n\n` +
+    `1인 기본 분배금: ${formatMesos(perPersonShare)} 메소\n` +
+    `택배 1건 수수료: ${formatMesos(parcelFeePerSend)} 메소\n` +
+    `총 택배 수수료: ${formatMesos(totalParcelFee)} 메소\n` +
+    `1인당 택배비 부담: ${formatMesos(parcelFeeShare)} 메소\n\n` +
+    `최종 1인 분배금: ${formatMesos(finalPerPerson)} 메소`
   );
 
   return;
