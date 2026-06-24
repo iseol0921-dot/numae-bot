@@ -19,6 +19,7 @@ function loadData() {
 function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
+
 function getBossEmoji(boss) {
   if (boss.includes('혼텔') || boss.includes('혼테일')) return '🐍';
   if (boss.includes('핑빈') || boss.includes('핑크빈')) return '🐷';
@@ -26,13 +27,14 @@ function getBossEmoji(boss) {
   if (boss.includes('카텔')) return '🐲';
   return '⚔️';
 }
+
 function makeEmbed(raid) {
   const list = raid.members.length
     ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
     : '아직 신청자가 없습니다.';
 
   return new EmbedBuilder()
-   .setTitle(`${getBossEmoji(raid.boss)} ${raid.boss} ${raid.date} ${raid.time}`)
+    .setTitle(`${getBossEmoji(raid.boss)} ${raid.boss} ${raid.date} ${raid.time}`)
     .setDescription(`현재 신청 인원: **${raid.members.length} / ${raid.limit}명**\n\n${list}`)
     .setColor(0x7c5cff);
 }
@@ -42,12 +44,10 @@ function makeButtons(raidId) {
     new ButtonBuilder().setCustomId(`join:${raidId}`).setLabel('참여신청').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`cancel:${raidId}`).setLabel('신청취소').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId(`list:${raidId}`).setLabel('명단확인').setStyle(ButtonStyle.Success),
-new ButtonBuilder()
-  .setCustomId(`party:${raidId}`)
-  .setLabel('공대편성')
-  .setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(`party:${raidId}`).setLabel('공대편성').setStyle(ButtonStyle.Secondary)
   );
 }
+
 function parseMoneyList(text) {
   if (!text || text === '0') return [];
   return text
@@ -69,14 +69,17 @@ function getParcelRate(amount) {
   if (amount >= 100000) return 0.008;
   return 0;
 }
+
 function getParcelFee(amount) {
   return 10000 + Math.floor(amount * getParcelRate(amount));
 }
+
 function restoreRaidFromMessage(interaction, raidId) {
   const embed = interaction.message.embeds[0];
   if (!embed) return null;
 
-  const title = embed.title.replace('🐍 ', '');
+  const rawTitle = embed.title ?? '';
+  const title = rawTitle.replace(/^.+?\s/, '');
   const parts = title.split(' ');
   const boss = parts[0] ?? '보스';
   const date = parts[1] ?? '';
@@ -94,7 +97,8 @@ function restoreRaidFromMessage(interaction, raidId) {
     messageId: interaction.message.id,
     channelId: interaction.channelId,
     createdBy: '',
-    members: []
+    members: [],
+    parties: { party1: [], party2: [], party3: [] }
   };
 }
 
@@ -122,7 +126,6 @@ client.once('ready', async () => {
   if (!fs.existsSync(DATA_FILE)) saveData({ raids: {} });
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
   await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
   await rest.put(Routes.applicationGuildCommands(client.user.id, SERVER_ID), { body: commands });
 
@@ -132,51 +135,46 @@ client.once('ready', async () => {
 client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand()) {
     if (interaction.commandName === '공대분배정산') {
-  const auctionAmounts = parseMoneyList(interaction.options.getString('경매장수령금액'));
-  const scissorAmounts = parseMoneyList(interaction.options.getString('가위값'));
-  const buyerAmounts = parseMoneyList(interaction.options.getString('공대원구매금액'));
-  const discount = interaction.options.getNumber('공대원할인율');
-  const people = interaction.options.getInteger('인원수');
+      const auctionAmounts = parseMoneyList(interaction.options.getString('경매장수령금액'));
+      const scissorAmounts = parseMoneyList(interaction.options.getString('가위값'));
+      const buyerAmounts = parseMoneyList(interaction.options.getString('공대원구매금액'));
+      const discount = interaction.options.getNumber('공대원할인율');
+      const people = interaction.options.getInteger('인원수');
 
-  const auctionTotal = auctionAmounts.reduce((a, b) => a + b, 0);
-  const scissorTotal = scissorAmounts.reduce((a, b) => a + b, 0);
-  const buyerRawTotal = buyerAmounts.reduce((a, b) => a + b, 0);
-  const buyerFinalTotal = Math.floor(buyerRawTotal * (100 - discount) / 100);
+      const auctionTotal = auctionAmounts.reduce((a, b) => a + b, 0);
+      const scissorTotal = scissorAmounts.reduce((a, b) => a + b, 0);
+      const buyerRawTotal = buyerAmounts.reduce((a, b) => a + b, 0);
+      const buyerFinalTotal = Math.floor(buyerRawTotal * (100 - discount) / 100);
 
-const totalPool = auctionTotal - scissorTotal + buyerFinalTotal;
+      const totalPool = auctionTotal - scissorTotal + buyerFinalTotal;
+      const perPersonShare = Math.floor(totalPool / people);
+      const sendCount = people - 1;
+      const parcelFeePerSend = getParcelFee(perPersonShare);
+      const totalParcelFee = parcelFeePerSend * sendCount;
+      const totalSendBudget = perPersonShare * sendCount;
+      const receivePerMember = sendCount > 0
+        ? Math.floor((totalSendBudget - totalParcelFee) / sendCount)
+        : 0;
 
-const perPersonShare = Math.floor(totalPool / people);
+      await interaction.reply(
+        `💰 공대 분배 정산 결과\n\n` +
+        `경매장 수령금액 합계: ${formatMesos(auctionTotal)} 메소\n` +
+        `가위값 차감: -${formatMesos(scissorTotal)} 메소\n` +
+        `공대원 구매금액: ${formatMesos(buyerRawTotal)} 메소\n` +
+        `공대원 할인율: ${discount}%\n` +
+        `할인 적용 구매금액: ${formatMesos(buyerFinalTotal)} 메소\n\n` +
+        `총 정산금: ${formatMesos(totalPool)} 메소\n` +
+        `분배 인원: ${people}명\n\n` +
+        `1인당 기본 분배금: ${formatMesos(perPersonShare)} 메소\n` +
+        `공대장 몫: ${formatMesos(perPersonShare)} 메소\n` +
+        `택배 발송 대상: ${sendCount}명\n` +
+        `1회 택배비: ${formatMesos(parcelFeePerSend)} 메소\n` +
+        `총 택배비: ${formatMesos(totalParcelFee)} 메소\n` +
+        `공대원이 실제 받는 금액: ${formatMesos(receivePerMember)} 메소`
+      );
+      return;
+    }
 
-const sendCount = people - 1;
-
-const parcelFeePerSend = getParcelFee(perPersonShare);
-
-const totalParcelFee = parcelFeePerSend * sendCount;
-
-const totalSendBudget = perPersonShare * sendCount;
-
-const receivePerMember = sendCount > 0
-  ? Math.floor((totalSendBudget - totalParcelFee) / sendCount)
-  : 0;
-  await interaction.reply(
-    `💰 공대 분배 정산 결과\n\n` +
-    `경매장 수령금액 합계: ${formatMesos(auctionTotal)} 메소\n` +
-    `가위값 차감: -${formatMesos(scissorTotal)} 메소\n` +
-    `공대원 구매금액: ${formatMesos(buyerRawTotal)} 메소\n` +
-    `공대원 할인율: ${discount}%\n` +
-    `할인 적용 구매금액: ${formatMesos(buyerFinalTotal)} 메소\n\n` +
-    `총 정산금: ${formatMesos(totalPool)} 메소\n` +
-`분배 인원: ${people}명\n\n` +
-`1인당 기본 분배금: ${formatMesos(perPersonShare)} 메소\n` +
-`공대장 몫: ${formatMesos(perPersonShare)} 메소\n` +
-`택배 발송 대상: ${sendCount}명\n` +
-`1회 택배비: ${formatMesos(parcelFeePerSend)} 메소\n` +
-`총 택배비: ${formatMesos(totalParcelFee)} 메소\n` +
-`공대원이 실제 받는 금액: ${formatMesos(receivePerMember)} 메소`
-  );
-
-  return;
-}
     if (interaction.commandName !== '모집생성') return;
 
     const raidId = `${Date.now()}`;
@@ -188,13 +186,13 @@ const receivePerMember = sendCount > 0
       limit: interaction.options.getInteger('정원'),
       messageId: null,
       channelId: interaction.channelId,
-     createdBy: interaction.user.id,
-members: [],
-parties: {
-  party1: [],
-  party2: [],
-  party3: []
-}
+      createdBy: interaction.user.id,
+      members: [],
+      parties: {
+        party1: [],
+        party2: [],
+        party3: []
+      }
     };
 
     await interaction.reply({
@@ -264,54 +262,38 @@ parties: {
       return;
     }
 
-   if (action === 'list') {
-  const list = raid.members.length
-    ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
-    : '아직 신청자가 없습니다.';
+    if (action === 'list') {
+      const list = raid.members.length
+        ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
+        : '아직 신청자가 없습니다.';
 
-  await interaction.reply({
-    content: `📋 ${raid.boss} 신청 명단\n\n${list}\n\n총 ${raid.members.length}명`,
-    ephemeral: true
-  });
-  return;
-}
+      await interaction.reply({
+        content: `📋 ${raid.boss} 신청 명단\n\n${list}\n\n총 ${raid.members.length}명`,
+        ephemeral: true
+      });
+      return;
+    }
 
-if (action === 'party') {
-  if (interaction.user.id !== raid.createdBy) {
-    await interaction.reply({
-      content: '공대장만 사용할 수 있어.',
-      ephemeral: true
-    });
-    return;
-  }
+    if (action === 'party') {
+      if (interaction.user.id !== raid.createdBy && raid.createdBy !== '') {
+        await interaction.reply({
+          content: '공대장만 사용할 수 있어.',
+          ephemeral: true
+        });
+        return;
+      }
 
-  const list = raid.members.length
-    ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
-    : '아직 신청자가 없습니다.';
+      const list = raid.members.length
+        ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
+        : '아직 신청자가 없습니다.';
 
-  await interaction.reply({
-    content:
-`📋 공대 편성용 신청자 목록
-
-${list}
-
-번호를 보고 나중에 1공대 / 2공대 / 3공대로 나누면 돼.`,
-    ephemeral: true
-  });
-  return;
-}
+      await interaction.reply({
         content:
 `📋 공대 편성용 신청자 목록
 
 ${list}
 
-번호를 보고 나중에 1공대/2공대/3공대로 나누면 돼.`,
-        ephemeral: true
-      });
-      return;
-    }
-      await interaction.reply({
-        content: `📋 ${raid.boss} 신청 명단\n\n${list}\n\n총 ${raid.members.length}명`,
+번호를 보고 1공대 / 2공대 / 3공대로 직접 나누면 돼.`,
         ephemeral: true
       });
       return;
