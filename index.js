@@ -102,6 +102,32 @@ function restoreRaidFromMessage(interaction, raidId) {
   };
 }
 
+function parseNames(text) {
+  if (!text) return [];
+  return text
+    .split(',')
+    .map(v => v.trim())
+    .filter(v => v.length > 0);
+}
+
+function pickMembersByName(raid, names) {
+  return names
+    .map(name =>
+      raid.members.find(m =>
+        m.nickname.toLowerCase() === name.toLowerCase()
+      )
+    )
+    .filter(Boolean);
+}
+
+function partyText(title, members) {
+  const body = members.length
+    ? members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
+    : '없음';
+
+  return `${title}\n${body}`;
+}
+
 const commands = [
   new SlashCommandBuilder()
     .setName('모집생성')
@@ -274,7 +300,7 @@ client.on('interactionCreate', async interaction => {
       return;
     }
 
-      if (action === 'party') {
+    if (action === 'party') {
       if (interaction.user.id !== raid.createdBy && raid.createdBy !== '') {
         await interaction.reply({
           content: '공대장만 사용할 수 있어.',
@@ -321,28 +347,13 @@ client.on('interactionCreate', async interaction => {
 
       await interaction.showModal(modal);
       return;
-      }
-
-      const list = raid.members.length
-        ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
-        : '아직 신청자가 없습니다.';
-
-      await interaction.reply({
-        content:
-`📋 공대 편성용 신청자 목록
-
-${list}
-
-번호를 보고 1공대 / 2공대 / 3공대로 직접 나누면 돼.`,
-        ephemeral: true
-      });
-      return;
     }
   }
 
   if (interaction.isModalSubmit()) {
     const [action, raidId] = interaction.customId.split(':');
-       if (action === 'party_modal') {
+
+    if (action === 'party_modal') {
       const data = loadData();
       const raid = data.raids[raidId];
 
@@ -354,35 +365,9 @@ ${list}
         return;
       }
 
-      function parseNames(text) {
-        if (!text) return [];
-        return text
-          .split(',')
-          .map(v => v.trim())
-          .filter(v => v.length > 0);
-      }
-
-      function pickMembers(names) {
-        return names
-          .map(name =>
-            raid.members.find(m =>
-              m.nickname.toLowerCase() === name.toLowerCase()
-            )
-          )
-          .filter(Boolean);
-      }
-
-      function partyText(title, members) {
-        const body = members.length
-          ? members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
-          : '없음';
-
-        return `${title}\n${body}`;
-      }
-
-      const party1 = pickMembers(parseNames(interaction.fields.getTextInputValue('party1')));
-      const party2 = pickMembers(parseNames(interaction.fields.getTextInputValue('party2')));
-      const party3 = pickMembers(parseNames(interaction.fields.getTextInputValue('party3')));
+      const party1 = pickMembersByName(raid, parseNames(interaction.fields.getTextInputValue('party1')));
+      const party2 = pickMembersByName(raid, parseNames(interaction.fields.getTextInputValue('party2')));
+      const party3 = pickMembersByName(raid, parseNames(interaction.fields.getTextInputValue('party3')));
 
       raid.parties = { party1, party2, party3 };
       data.raids[raidId] = raid;
@@ -399,9 +384,10 @@ ${partyText('🟦 2공대', party2)}
 ${partyText('🟩 3공대', party3)}`,
         ephemeral: false
       });
-
       return;
-    } if (action !== 'modal_join') return;
+    }
+
+    if (action !== 'modal_join') return;
 
     const data = loadData();
     const raid = data.raids[raidId];
