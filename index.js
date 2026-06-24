@@ -44,7 +44,45 @@ function makeButtons(raidId) {
     new ButtonBuilder().setCustomId(`list:${raidId}`).setLabel('명단확인').setStyle(ButtonStyle.Success)
   );
 }
+function parseMoneyList(text) {
+  if (!text || text === '0') return [];
+  return text
+    .split(',')
+    .map(v => Number(v.trim().replaceAll(',', '')))
+    .filter(v => !isNaN(v) && v > 0);
+}
 
+function formatMesos(num) {
+  return Math.floor(num).toLocaleString('ko-KR');
+}
+
+function getParcelRate(amount) {
+  if (amount >= 100000000) return 0.06;
+  if (amount >= 25000000) return 0.05;
+  if (amount >= 10000000) return 0.04;
+  if (amount >= 5000000) return 0.03;
+  if (amount >= 1000000) return 0.018;
+  if (amount >= 100000) return 0.008;
+  return 0;
+}
+function getNetReceiveFromBudget(budget) {
+  let left = 0;
+  let right = Math.floor(budget);
+
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2);
+    const fee = 10000 + Math.floor(mid * getParcelRate(mid));
+    const total = mid + fee;
+
+    if (total <= budget) left = mid + 1;
+    else right = mid - 1;
+  }
+
+  const receive = right;
+  const fee = 10000 + Math.floor(receive * getParcelRate(receive));
+
+  return { receive, fee, sendTotal: receive + fee };
+}
 function restoreRaidFromMessage(interaction, raidId) {
   const embed = interaction.message.embeds[0];
   if (!embed) return null;
@@ -73,7 +111,15 @@ function restoreRaidFromMessage(interaction, raidId) {
 
 const commands = [
   new SlashCommandBuilder()
-    .setName('모집생성')
+    .setName('모집생성'),
+new SlashCommandBuilder()
+  .setName('공대분배정산')
+  .setDescription('공대 분배금 정산 계산')
+  .addStringOption(o => o.setName('경매장수령금액').setDescription('예: 66599999,5299999').setRequired(true))
+  .addStringOption(o => o.setName('가위값').setDescription('예: 4639998 / 없으면 0').setRequired(true))
+  .addStringOption(o => o.setName('공대원구매금액').setDescription('예: 100000000 / 없으면 0').setRequired(true))
+  .addNumberOption(o => o.setName('공대원할인율').setDescription('예: 10 / 없으면 0').setRequired(true))
+  .addIntegerOption(o => o.setName('인원수').setDescription('분배 인원').setRequired(true))
     .setDescription('공대 모집글 생성')
     .addStringOption(o => o.setName('보스').setDescription('예: 혼텔, 카텔, 핑빈, 카쿰').setRequired(true))
     .addStringOption(o => o.setName('날짜').setDescription('예: 6/24(수)').setRequired(true))
@@ -95,6 +141,39 @@ client.once('ready', async () => {
 
 client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === '공대분배정산') {
+  const auctionAmounts = parseMoneyList(interaction.options.getString('경매장수령금액'));
+  const scissorAmounts = parseMoneyList(interaction.options.getString('가위값'));
+  const buyerAmounts = parseMoneyList(interaction.options.getString('공대원구매금액'));
+  const discount = interaction.options.getNumber('공대원할인율');
+  const people = interaction.options.getInteger('인원수');
+
+  const auctionTotal = auctionAmounts.reduce((a, b) => a + b, 0);
+  const scissorTotal = scissorAmounts.reduce((a, b) => a + b, 0);
+  const buyerRawTotal = buyerAmounts.reduce((a, b) => a + b, 0);
+  const buyerFinalTotal = Math.floor(buyerRawTotal * (100 - discount) / 100);
+
+  const totalPool = auctionTotal - scissorTotal + buyerFinalTotal;
+  const perPersonBudget = Math.floor(totalPool / people);
+  const parcel = getNetReceiveFromBudget(perPersonBudget);
+
+  await interaction.reply(
+    `💰 공대 분배 정산 결과\n\n` +
+    `경매장 수령금액 합계: ${formatMesos(auctionTotal)} 메소\n` +
+    `가위값 차감: -${formatMesos(scissorTotal)} 메소\n` +
+    `공대원 구매금액: ${formatMesos(buyerRawTotal)} 메소\n` +
+    `공대원 할인율: ${discount}%\n` +
+    `할인 적용 구매금액: ${formatMesos(buyerFinalTotal)} 메소\n\n` +
+    `총 정산금: ${formatMesos(totalPool)} 메소\n` +
+    `분배 인원: ${people}명\n\n` +
+    `1인당 분배 예산: ${formatMesos(perPersonBudget)} 메소\n` +
+    `택배 수수료: ${formatMesos(parcel.fee)} 메소\n` +
+    `1인 실수령액: ${formatMesos(parcel.receive)} 메소\n` +
+    `1인 총 사용액: ${formatMesos(parcel.sendTotal)} 메소`
+  );
+
+  return;
+}
     if (interaction.commandName !== '모집생성') return;
 
     const raidId = `${Date.now()}`;
