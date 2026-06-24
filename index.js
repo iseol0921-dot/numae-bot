@@ -184,8 +184,13 @@ const receivePerMember = sendCount > 0
       limit: interaction.options.getInteger('정원'),
       messageId: null,
       channelId: interaction.channelId,
-      createdBy: interaction.user.id,
-      members: []
+     createdBy: interaction.user.id,
+members: [],
+parties: {
+  party1: [],
+  party2: [],
+  party3: []
+}
     };
 
     await interaction.reply({
