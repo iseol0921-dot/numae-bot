@@ -215,10 +215,10 @@ saveData(data);
       data.raids[raidId] = raid;
       saveData(data);
 
-      const msg = await interaction.channel.messages.fetch(raid.messageId);
-      await msg.edit({
-        embeds: [makeEmbed(raid)],
-        components: [makeButtons(raidId)]
+     await interaction.message.edit({
+  embeds: [makeEmbed(raid)],
+  components: [makeButtons(raidId)]
+});
       });
 
       await interaction.reply({
