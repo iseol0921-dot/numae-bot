@@ -111,20 +111,21 @@ function restoreRaidFromMessage(interaction, raidId) {
 
 const commands = [
   new SlashCommandBuilder()
-    .setName('모집생성'),
-new SlashCommandBuilder()
-  .setName('공대분배정산')
-  .setDescription('공대 분배금 정산 계산')
-  .addStringOption(o => o.setName('경매장수령금액').setDescription('예: 66599999,5299999').setRequired(true))
-  .addStringOption(o => o.setName('가위값').setDescription('예: 4639998 / 없으면 0').setRequired(true))
-  .addStringOption(o => o.setName('공대원구매금액').setDescription('예: 100000000 / 없으면 0').setRequired(true))
-  .addNumberOption(o => o.setName('공대원할인율').setDescription('예: 10 / 없으면 0').setRequired(true))
-  .addIntegerOption(o => o.setName('인원수').setDescription('분배 인원').setRequired(true))
+    .setName('모집생성')
     .setDescription('공대 모집글 생성')
     .addStringOption(o => o.setName('보스').setDescription('예: 혼텔, 카텔, 핑빈, 카쿰').setRequired(true))
     .addStringOption(o => o.setName('날짜').setDescription('예: 6/24(수)').setRequired(true))
     .addStringOption(o => o.setName('시간').setDescription('예: 22시').setRequired(true))
-    .addIntegerOption(o => o.setName('정원').setDescription('모집 기준 인원').setRequired(true))
+    .addIntegerOption(o => o.setName('정원').setDescription('모집 기준 인원').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('공대분배정산')
+    .setDescription('공대 분배금 정산 계산')
+    .addStringOption(o => o.setName('경매장수령금액').setDescription('예: 66599999,5299999').setRequired(true))
+    .addStringOption(o => o.setName('가위값').setDescription('예: 4639998 / 없으면 0').setRequired(true))
+    .addStringOption(o => o.setName('공대원구매금액').setDescription('예: 100000000 / 없으면 0').setRequired(true))
+    .addNumberOption(o => o.setName('공대원할인율').setDescription('예: 10 / 없으면 0').setRequired(true))
+    .addIntegerOption(o => o.setName('인원수').setDescription('분배 인원').setRequired(true))
 ].map(c => c.toJSON());
 
 client.once('ready', async () => {
