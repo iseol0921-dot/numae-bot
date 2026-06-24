@@ -153,9 +153,14 @@ client.once('ready', async () => {
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
-  await rest.put(Routes.applicationGuildCommands(client.user.id, SERVER_ID), { body: commands });
+ for (const guildId of SERVER_IDS) {
+  await rest.put(
+    Routes.applicationGuildCommands(client.user.id, guildId),
+    { body: commands }
+  );
+}
 
-  console.log('명령어 등록 완료!');
+console.log('모든 서버 명령어 등록 완료!');
 });
 
 client.on('interactionCreate', async interaction => {
