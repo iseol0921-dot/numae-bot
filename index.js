@@ -268,7 +268,30 @@ parties: {
       const list = raid.members.length
         ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
         : '아직 신청자가 없습니다.';
+    if (action === 'party') {
+      if (interaction.user.id !== raid.createdBy) {
+        await interaction.reply({
+          content: '공대장만 사용할 수 있어.',
+          ephemeral: true
+        });
+        return;
+      }
 
+      const list = raid.members.length
+        ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
+        : '아직 신청자가 없습니다.';
+
+      await interaction.reply({
+        content:
+`📋 공대 편성용 신청자 목록
+
+${list}
+
+번호를 보고 나중에 1공대/2공대/3공대로 나누면 돼.`,
+        ephemeral: true
+      });
+      return;
+    }
       await interaction.reply({
         content: `📋 ${raid.boss} 신청 명단\n\n${list}\n\n총 ${raid.members.length}명`,
         ephemeral: true
