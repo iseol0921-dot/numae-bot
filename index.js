@@ -145,12 +145,6 @@ const perPersonShare = Math.floor(totalPool / people);
 
 const parcelFeePerSend = getParcelFee(perPersonShare);
 
-const totalParcelFee = parcelFeePerSend * people;
-
-const parcelFeeShare = Math.floor(totalParcelFee / people);
-
-const finalPerPerson = perPersonShare - parcelFeeShare;
-
   await interaction.reply(
     `💰 공대 분배 정산 결과\n\n` +
     `경매장 수령금액 합계: ${formatMesos(auctionTotal)} 메소\n` +
@@ -159,10 +153,9 @@ const finalPerPerson = perPersonShare - parcelFeeShare;
     `공대원 할인율: ${discount}%\n` +
     `할인 적용 구매금액: ${formatMesos(buyerFinalTotal)} 메소\n\n` +
     `총 정산금: ${formatMesos(totalPool)} 메소\n` +
-       `분배 인원: ${people}명\n\n` +
-    `1인 기본 분배금: ${formatMesos(perPersonShare)} 메소\n` +
-    `택배 수수료: ${formatMesos(parcelFeePerSend)} 메소\n\n` +
-   `최종 1인 분배금: ${formatMesos(finalPerPerson)} 메소`
+`분배 인원: ${people}명\n\n` +
+`1인당 분배금: ${formatMesos(perPersonShare)} 메소\n` +
+`택배 수수료: ${formatMesos(parcelFeePerSend)} 메소`
   );
 
   return;
