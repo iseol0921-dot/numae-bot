@@ -1,35 +1,19 @@
 import {
-  Client,
-  GatewayIntentBits,
-  REST,
-  Routes,
-  SlashCommandBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  EmbedBuilder
+  Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle,
+  ModalBuilder, TextInputBuilder, TextInputStyle, EmbedBuilder
 } from 'discord.js';
-
 import fs from 'fs';
 
 const SERVER_ID = '1519109990101815386';
 const DATA_FILE = './data.json';
 
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
-});
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 function loadData() {
   if (!fs.existsSync(DATA_FILE)) return { raids: {} };
-
-  try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-  } catch {
-    return { raids: {} };
-  }
+  try { return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); }
+  catch { return { raids: {} }; }
 }
 
 function saveData(data) {
@@ -49,57 +33,56 @@ function makeEmbed(raid) {
 
 function makeButtons(raidId) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`join:${raidId}`)
-      .setLabel('참여신청')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`cancel:${raidId}`)
-      .setLabel('신청취소')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(`list:${raidId}`)
-      .setLabel('명단확인')
-      .setStyle(ButtonStyle.Success)
+    new ButtonBuilder().setCustomId(`join:${raidId}`).setLabel('참여신청').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`cancel:${raidId}`).setLabel('신청취소').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`list:${raidId}`).setLabel('명단확인').setStyle(ButtonStyle.Success)
   );
+}
+
+function restoreRaidFromMessage(interaction, raidId) {
+  const embed = interaction.message.embeds[0];
+  if (!embed) return null;
+
+  const title = embed.title.replace('🐍 ', '');
+  const parts = title.split(' ');
+  const boss = parts[0] ?? '보스';
+  const date = parts[1] ?? '';
+  const time = parts.slice(2).join(' ') || '';
+  const desc = embed.description ?? '';
+  const limitMatch = desc.match(/\/\s*(\d+)명/);
+  const limit = limitMatch ? Number(limitMatch[1]) : 0;
+
+  return {
+    id: raidId,
+    boss,
+    date,
+    time,
+    limit,
+    messageId: interaction.message.id,
+    channelId: interaction.channelId,
+    createdBy: '',
+    members: []
+  };
 }
 
 const commands = [
   new SlashCommandBuilder()
     .setName('모집생성')
     .setDescription('공대 모집글 생성')
-    .addStringOption(o =>
-      o.setName('보스').setDescription('예: 혼텔, 카텔, 핑빈, 카쿰').setRequired(true)
-    )
-    .addStringOption(o =>
-      o.setName('날짜').setDescription('예: 6/24(수)').setRequired(true)
-    )
-    .addStringOption(o =>
-      o.setName('시간').setDescription('예: 22시').setRequired(true)
-    )
-    .addIntegerOption(o =>
-      o.setName('정원').setDescription('모집 기준 인원').setRequired(true)
-    )
+    .addStringOption(o => o.setName('보스').setDescription('예: 혼텔, 카텔, 핑빈, 카쿰').setRequired(true))
+    .addStringOption(o => o.setName('날짜').setDescription('예: 6/24(수)').setRequired(true))
+    .addStringOption(o => o.setName('시간').setDescription('예: 22시').setRequired(true))
+    .addIntegerOption(o => o.setName('정원').setDescription('모집 기준 인원').setRequired(true))
 ].map(c => c.toJSON());
 
 client.once('ready', async () => {
   console.log(`${client.user.tag} 로그인 완료!`);
-
-  if (!fs.existsSync(DATA_FILE)) {
-    saveData({ raids: {} });
-  }
+  if (!fs.existsSync(DATA_FILE)) saveData({ raids: {} });
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-  await rest.put(
-    Routes.applicationCommands(client.user.id),
-    { body: [] }
-  );
-
-  await rest.put(
-    Routes.applicationGuildCommands(client.user.id, SERVER_ID),
-    { body: commands }
-  );
+  await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
+  await rest.put(Routes.applicationGuildCommands(client.user.id, SERVER_ID), { body: commands });
 
   console.log('명령어 등록 완료!');
 });
@@ -108,27 +91,18 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand()) {
     if (interaction.commandName !== '모집생성') return;
 
-    const boss = interaction.options.getString('보스');
-    const date = interaction.options.getString('날짜');
-    const time = interaction.options.getString('시간');
-    const limit = interaction.options.getInteger('정원');
     const raidId = `${Date.now()}`;
-
     const raid = {
       id: raidId,
-      boss,
-      date,
-      time,
-      limit,
+      boss: interaction.options.getString('보스'),
+      date: interaction.options.getString('날짜'),
+      time: interaction.options.getString('시간'),
+      limit: interaction.options.getInteger('정원'),
       messageId: null,
       channelId: interaction.channelId,
       createdBy: interaction.user.id,
       members: []
     };
-
-    const data = loadData();
-    data.raids[raidId] = raid;
-    saveData(data);
 
     await interaction.reply({
       embeds: [makeEmbed(raid)],
@@ -138,6 +112,7 @@ client.on('interactionCreate', async interaction => {
     const message = await interaction.fetchReply();
     raid.messageId = message.id;
 
+    const data = loadData();
     data.raids[raidId] = raid;
     saveData(data);
     return;
@@ -145,16 +120,18 @@ client.on('interactionCreate', async interaction => {
 
   if (interaction.isButton()) {
     const [action, raidId] = interaction.customId.split(':');
-
     const data = loadData();
-    const raid = data.raids[raidId];
+
+    let raid = data.raids[raidId];
 
     if (!raid) {
-      await interaction.reply({
-        content: '모집글 정보를 찾을 수 없어. 다시 생성해줘.',
-        ephemeral: true
-      });
-      return;
+      raid = restoreRaidFromMessage(interaction, raidId);
+      if (!raid) {
+        await interaction.reply({ content: '모집글 정보를 찾을 수 없어. 다시 생성해줘.', ephemeral: true });
+        return;
+      }
+      data.raids[raidId] = raid;
+      saveData(data);
     }
 
     if (action === 'join') {
@@ -162,28 +139,16 @@ client.on('interactionCreate', async interaction => {
         .setCustomId(`modal_join:${raidId}`)
         .setTitle(`${raid.boss} 참여신청`);
 
-      const nickname = new TextInputBuilder()
-        .setCustomId('nickname')
-        .setLabel('닉네임')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-      const job = new TextInputBuilder()
-        .setCustomId('job')
-        .setLabel('직업')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-      const level = new TextInputBuilder()
-        .setCustomId('level')
-        .setLabel('레벨')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
       modal.addComponents(
-        new ActionRowBuilder().addComponents(nickname),
-        new ActionRowBuilder().addComponents(job),
-        new ActionRowBuilder().addComponents(level)
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('nickname').setLabel('닉네임').setStyle(TextInputStyle.Short).setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('job').setLabel('직업').setStyle(TextInputStyle.Short).setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('level').setLabel('레벨').setStyle(TextInputStyle.Short).setRequired(true)
+        )
       );
 
       await interaction.showModal(modal);
@@ -192,12 +157,8 @@ client.on('interactionCreate', async interaction => {
 
     if (action === 'cancel') {
       const index = raid.members.findIndex(m => m.userId === interaction.user.id);
-
       if (index === -1) {
-        await interaction.reply({
-          content: '신청 내역이 없어.',
-          ephemeral: true
-        });
+        await interaction.reply({ content: '신청 내역이 없어.', ephemeral: true });
         return;
       }
 
@@ -205,15 +166,8 @@ client.on('interactionCreate', async interaction => {
       data.raids[raidId] = raid;
       saveData(data);
 
-      await interaction.message.edit({
-        embeds: [makeEmbed(raid)],
-        components: [makeButtons(raidId)]
-      });
-
-      await interaction.reply({
-        content: '✅ 신청 취소 완료',
-        ephemeral: true
-      });
+      await interaction.message.edit({ embeds: [makeEmbed(raid)], components: [makeButtons(raidId)] });
+      await interaction.reply({ content: '✅ 신청 취소 완료', ephemeral: true });
       return;
     }
 
@@ -238,15 +192,11 @@ client.on('interactionCreate', async interaction => {
     const raid = data.raids[raidId];
 
     if (!raid) {
-      await interaction.reply({
-        content: '모집글 정보를 찾을 수 없어. 다시 생성해줘.',
-        ephemeral: true
-      });
+      await interaction.reply({ content: '모집글 정보를 찾을 수 없어. 다시 생성해줘.', ephemeral: true });
       return;
     }
 
     const existing = raid.members.find(m => m.userId === interaction.user.id);
-
     if (existing) {
       await interaction.reply({
         content: `이미 신청되어 있어.\n${existing.nickname} / ${existing.job} / ${existing.level}`,
@@ -259,20 +209,14 @@ client.on('interactionCreate', async interaction => {
     const job = interaction.fields.getTextInputValue('job');
     const level = interaction.fields.getTextInputValue('level');
 
-    raid.members.push({
-      userId: interaction.user.id,
-      nickname,
-      job,
-      level
-    });
-
+    raid.members.push({ userId: interaction.user.id, nickname, job, level });
     data.raids[raidId] = raid;
     saveData(data);
 
-    await interaction.message.edit({
-      embeds: [makeEmbed(raid)],
-      components: [makeButtons(raidId)]
-    });
+    const channel = await client.channels.fetch(raid.channelId);
+    const msg = await channel.messages.fetch(raid.messageId);
+
+    await msg.edit({ embeds: [makeEmbed(raid)], components: [makeButtons(raidId)] });
 
     await interaction.reply({
       content: `✅ 신청 완료\n${nickname} / ${job} / ${level}`,
