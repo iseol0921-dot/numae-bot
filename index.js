@@ -65,23 +65,8 @@ function getParcelRate(amount) {
   if (amount >= 100000) return 0.008;
   return 0;
 }
-function getNetReceiveFromBudget(budget) {
-  let left = 0;
-  let right = Math.floor(budget);
-
-  while (left <= right) {
-    const mid = Math.floor((left + right) / 2);
-    const fee = 10000 + Math.floor(mid * getParcelRate(mid));
-    const total = mid + fee;
-
-    if (total <= budget) left = mid + 1;
-    else right = mid - 1;
-  }
-
-  const receive = right;
-  const fee = 10000 + Math.floor(receive * getParcelRate(receive));
-
-  return { receive, fee, sendTotal: receive + fee };
+function getParcelFee(amount) {
+  return 10000 + Math.floor(amount * getParcelRate(amount));
 }
 function restoreRaidFromMessage(interaction, raidId) {
   const embed = interaction.message.embeds[0];
