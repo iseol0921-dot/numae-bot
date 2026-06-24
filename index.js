@@ -274,13 +274,53 @@ client.on('interactionCreate', async interaction => {
       return;
     }
 
-    if (action === 'party') {
+      if (action === 'party') {
       if (interaction.user.id !== raid.createdBy && raid.createdBy !== '') {
         await interaction.reply({
           content: '공대장만 사용할 수 있어.',
           ephemeral: true
         });
         return;
+      }
+
+      if (!raid.members.length) {
+        await interaction.reply({
+          content: '아직 신청자가 없어서 공대편성을 할 수 없어.',
+          ephemeral: true
+        });
+        return;
+      }
+
+      const modal = new ModalBuilder()
+        .setCustomId(`party_modal:${raidId}`)
+        .setTitle(`${raid.boss} 공대편성`);
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('party1')
+            .setLabel('1공대 닉네임, 쉼표로 구분')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(false)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('party2')
+            .setLabel('2공대 닉네임, 쉼표로 구분')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(false)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId('party3')
+            .setLabel('3공대 닉네임, 쉼표로 구분')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(false)
+        )
+      );
+
+      await interaction.showModal(modal);
+      return;
       }
 
       const list = raid.members.length
@@ -302,7 +342,66 @@ ${list}
 
   if (interaction.isModalSubmit()) {
     const [action, raidId] = interaction.customId.split(':');
-    if (action !== 'modal_join') return;
+       if (action === 'party_modal') {
+      const data = loadData();
+      const raid = data.raids[raidId];
+
+      if (!raid) {
+        await interaction.reply({
+          content: '모집글 정보를 찾을 수 없어. 다시 생성해줘.',
+          ephemeral: true
+        });
+        return;
+      }
+
+      function parseNames(text) {
+        if (!text) return [];
+        return text
+          .split(',')
+          .map(v => v.trim())
+          .filter(v => v.length > 0);
+      }
+
+      function pickMembers(names) {
+        return names
+          .map(name =>
+            raid.members.find(m =>
+              m.nickname.toLowerCase() === name.toLowerCase()
+            )
+          )
+          .filter(Boolean);
+      }
+
+      function partyText(title, members) {
+        const body = members.length
+          ? members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
+          : '없음';
+
+        return `${title}\n${body}`;
+      }
+
+      const party1 = pickMembers(parseNames(interaction.fields.getTextInputValue('party1')));
+      const party2 = pickMembers(parseNames(interaction.fields.getTextInputValue('party2')));
+      const party3 = pickMembers(parseNames(interaction.fields.getTextInputValue('party3')));
+
+      raid.parties = { party1, party2, party3 };
+      data.raids[raidId] = raid;
+      saveData(data);
+
+      await interaction.reply({
+        content:
+`📢 ${raid.boss} ${raid.date} ${raid.time} 공대 편성 결과
+
+${partyText('🟥 1공대', party1)}
+
+${partyText('🟦 2공대', party2)}
+
+${partyText('🟩 3공대', party3)}`,
+        ephemeral: false
+      });
+
+      return;
+    } if (action !== 'modal_join') return;
 
     const data = loadData();
     const raid = data.raids[raidId];
