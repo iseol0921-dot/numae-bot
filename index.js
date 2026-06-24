@@ -145,11 +145,15 @@ const perPersonShare = Math.floor(totalPool / people);
 
 const sendCount = people - 1;
 
-const totalParcelFee = getParcelFee(perPersonShare) * sendCount;
+const parcelFeePerSend = getParcelFee(perPersonShare);
 
-const parcelFeePerPerson = Math.floor(totalParcelFee / people);
+const totalParcelFee = parcelFeePerSend * sendCount;
 
-const realReceive = perPersonShare - parcelFeePerPerson;
+const totalSendBudget = perPersonShare * sendCount;
+
+const receivePerMember = sendCount > 0
+  ? Math.floor((totalSendBudget - totalParcelFee) / sendCount)
+  : 0;
   await interaction.reply(
     `💰 공대 분배 정산 결과\n\n` +
     `경매장 수령금액 합계: ${formatMesos(auctionTotal)} 메소\n` +
@@ -160,10 +164,11 @@ const realReceive = perPersonShare - parcelFeePerPerson;
     `총 정산금: ${formatMesos(totalPool)} 메소\n` +
 `분배 인원: ${people}명\n\n` +
 `1인당 기본 분배금: ${formatMesos(perPersonShare)} 메소\n` +
+`공대장 몫: ${formatMesos(perPersonShare)} 메소\n` +
 `택배 발송 대상: ${sendCount}명\n` +
+`1회 택배비: ${formatMesos(parcelFeePerSend)} 메소\n` +
 `총 택배비: ${formatMesos(totalParcelFee)} 메소\n` +
-`1인당 택배비 부담: ${formatMesos(parcelFeePerPerson)} 메소\n` +
-`최종 1인 실수령액: ${formatMesos(realReceive)} 메소`
+`공대원이 실제 받는 금액: ${formatMesos(receivePerMember)} 메소`
   );
 
   return;
