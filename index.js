@@ -376,7 +376,23 @@ client.on('interactionCreate', async interaction => {
       const party1 = pickMembersByName(raid, parseNames(interaction.fields.getTextInputValue('party1')));
       const party2 = pickMembersByName(raid, parseNames(interaction.fields.getTextInputValue('party2')));
       const party3 = pickMembersByName(raid, parseNames(interaction.fields.getTextInputValue('party3')));
+const allPartyMembers = [...party1, ...party2, ...party3];
 
+if (!data.contribution) data.contribution = {};
+
+for (const m of allPartyMembers) {
+  if (!data.contribution[m.nickname]) {
+    data.contribution[m.nickname] = {
+      count: 0,
+      job: m.job,
+      level: m.level
+    };
+  }
+
+  data.contribution[m.nickname].count += 1;
+  data.contribution[m.nickname].job = m.job;
+  data.contribution[m.nickname].level = m.level;
+}
       raid.parties = { party1, party2, party3 };
       data.raids[raidId] = raid;
       saveData(data);
