@@ -139,9 +139,17 @@ client.on('interactionCreate', async interaction => {
   const buyerRawTotal = buyerAmounts.reduce((a, b) => a + b, 0);
   const buyerFinalTotal = Math.floor(buyerRawTotal * (100 - discount) / 100);
 
-  const totalPool = auctionTotal - scissorTotal + buyerFinalTotal;
-  const perPersonBudget = Math.floor(totalPool / people);
-  const parcel = getNetReceiveFromBudget(perPersonBudget);
+const totalPool = auctionTotal - scissorTotal + buyerFinalTotal;
+
+const perPersonShare = Math.floor(totalPool / people);
+
+const parcelFeePerSend = getParcelFee(perPersonShare);
+
+const totalParcelFee = parcelFeePerSend * people;
+
+const parcelFeeShare = Math.floor(totalParcelFee / people);
+
+const finalPerPerson = perPersonShare - parcelFeeShare;
 
   await interaction.reply(
     `💰 공대 분배 정산 결과\n\n` +
