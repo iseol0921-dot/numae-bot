@@ -5,7 +5,10 @@ import {
 } from 'discord.js';
 import fs from 'fs';
 
-const SERVER_ID = '1519109990101815386';
+const SERVER_IDS = [
+  '1519109990101815386',
+  '1516990201204117565'
+];
 const DATA_FILE = './data.json';
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
