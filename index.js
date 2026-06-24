@@ -19,14 +19,20 @@ function loadData() {
 function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
-
+function getBossEmoji(boss) {
+  if (boss.includes('혼텔') || boss.includes('혼테일')) return '🐍';
+  if (boss.includes('핑빈') || boss.includes('핑크빈')) return '🐷';
+  if (boss.includes('카쿰') || boss.includes('자쿰')) return '💀';
+  if (boss.includes('카텔')) return '🐲';
+  return '⚔️';
+}
 function makeEmbed(raid) {
   const list = raid.members.length
     ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
     : '아직 신청자가 없습니다.';
 
   return new EmbedBuilder()
-    .setTitle(`🐍 ${raid.boss} ${raid.date} ${raid.time}`)
+   .setTitle(`${getBossEmoji(raid.boss)} ${raid.boss} ${raid.date} ${raid.time}`)
     .setDescription(`현재 신청 인원: **${raid.members.length} / ${raid.limit}명**\n\n${list}`)
     .setColor(0x7c5cff);
 }
