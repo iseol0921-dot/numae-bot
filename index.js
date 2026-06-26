@@ -50,18 +50,18 @@ function makeEmbed(raid) {
     ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
     : '아직 신청자가 없습니다.';
 
-  return new EmbedBuilder()
+  return  EmbedBuilder()
     .setTitle(`${getBossEmoji(raid.boss)} ${raid.boss} ${raid.date} ${raid.time}`)
     .setDescription(`현재 신청 인원: **${raid.members.length} / ${raid.limit}명**\n\n${list}`)
     .setColor(0x7c5cff);
 }
 
 function makeButtons(raidId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`join:${raidId}`).setLabel('참여신청').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(`cancel:${raidId}`).setLabel('신청취소').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`list:${raidId}`).setLabel('명단확인').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`party:${raidId}`).setLabel('공대편성').setStyle(ButtonStyle.Secondary)
+  return  ActionRowBuilder().addComponents(
+     ButtonBuilder().setCustomId(`join:${raidId}`).setLabel('참여신청').setStyle(ButtonStyle.Primary),
+     ButtonBuilder().setCustomId(`cancel:${raidId}`).setLabel('신청취소').setStyle(ButtonStyle.Danger),
+     ButtonBuilder().setCustomId(`list:${raidId}`).setLabel('명단확인').setStyle(ButtonStyle.Success),
+     ButtonBuilder().setCustomId(`party:${raidId}`).setLabel('공대편성').setStyle(ButtonStyle.Secondary)
   );
 }
 
@@ -150,7 +150,11 @@ async function repostNotice(guildId, channelId) {
     }
   }
 
-  const newMsg = await channel.send(notice.content);
+ const embed = new EmbedBuilder()
+  .setTitle('💗 공지 안 읽으면 머머리 💗')
+  .setDescription(notice.content)
+  .setColor(0xff69b4);
+const newMsg = await channel.send({ embeds: [embed] });
   notice.messageId = newMsg.id;
   notice.count = 0;
 
@@ -255,8 +259,12 @@ client.on('interactionCreate', async interaction => {
           if (oldMsg) await oldMsg.delete().catch(() => {});
         }
 
-        const msg = await interaction.channel.send(content);
+       const embed = new EmbedBuilder()
+  .setTitle('💗 공지 안 읽으면 머머리 💗')
+  .setDescription(content)
+  .setColor(0xff69b4);
 
+const msg = await interaction.channel.send({ embeds: [embed] });
         data.notices[guildId][channelId] = {
           content,
           messageId: msg.id,
