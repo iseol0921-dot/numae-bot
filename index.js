@@ -9,14 +9,28 @@ const SERVER_IDS = [
   '1519109990101815386',
   '1506990201204117565'
 ];
-const DATA_FILE = './data.json';
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const DATA_FILE = './data.json';
+const NOTICE_REFRESH_COUNT = 10;
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages
+  ]
+});
 
 function loadData() {
-  if (!fs.existsSync(DATA_FILE)) return { raids: {} };
-  try { return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); }
-  catch { return { raids: {} }; }
+  if (!fs.existsSync(DATA_FILE)) return { raids: {}, notices: {}, contribution: {} };
+  try {
+    const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    if (!data.raids) data.raids = {};
+    if (!data.notices) data.notices = {};
+    if (!data.contribution) data.contribution = {};
+    return data;
+  } catch {
+    return { raids: {}, notices: {}, contribution: {} };
+  }
 }
 
 function saveData(data) {
@@ -64,7 +78,7 @@ function formatMesos(num) {
 }
 
 function getParcelFee(amount) {
-    return 10000 + Math.floor(amount * 0.04);
+  return 10000 + Math.floor(amount * 0.04);
 }
 
 function restoreRaidFromMessage(interaction, raidId) {
@@ -121,6 +135,29 @@ function partyText(title, members) {
   return `${title}\n${body}`;
 }
 
+async function repostNotice(guildId, channelId) {
+  const data = loadData();
+  const notice = data.notices?.[guildId]?.[channelId];
+  if (!notice) return;
+
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel || !channel.isTextBased()) return;
+
+  if (notice.messageId) {
+    const oldMsg = await channel.messages.fetch(notice.messageId).catch(() => null);
+    if (oldMsg) {
+      await oldMsg.delete().catch(() => {});
+    }
+  }
+
+  const newMsg = await channel.send(notice.content);
+  notice.messageId = newMsg.id;
+  notice.count = 0;
+
+  data.notices[guildId][channelId] = notice;
+  saveData(data);
+}
+
 const commands = [
   new SlashCommandBuilder()
     .setName('모집생성')
@@ -137,258 +174,366 @@ const commands = [
     .addStringOption(o => o.setName('가위값').setDescription('예: 6000000 / 없으면 0').setRequired(true))
     .addStringOption(o => o.setName('공대원구매금액').setDescription('예: 100000000 / 없으면 0').setRequired(true))
     .addNumberOption(o => o.setName('공대원할인율').setDescription('예: 10 / 없으면 0').setRequired(true))
-    .addIntegerOption(o => o.setName('인원수').setDescription('분배 인원').setRequired(true))
+    .addIntegerOption(o => o.setName('인원수').setDescription('분배 인원').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('상시공지설정')
+    .setDescription('이 채널에 상시공지를 설정합니다')
+    .addStringOption(o =>
+      o.setName('내용')
+        .setDescription('상시공지 내용')
+        .setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName('상시공지삭제')
+    .setDescription('이 채널의 상시공지를 삭제합니다')
 ].map(c => c.toJSON());
 
 client.once('ready', async () => {
   console.log(`${client.user.tag} 로그인 완료!`);
-  if (!fs.existsSync(DATA_FILE)) saveData({ raids: {} });
+  if (!fs.existsSync(DATA_FILE)) saveData({ raids: {}, notices: {}, contribution: {} });
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-  await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
- for (const guildId of SERVER_IDS) {
-  await rest.put(
-    Routes.applicationGuildCommands(client.user.id, guildId),
-    { body: commands }
-  );
-}
 
-console.log('모든 서버 명령어 등록 완료!');
+  await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
+
+  for (const guildId of SERVER_IDS) {
+    await rest.put(
+      Routes.applicationGuildCommands(client.user.id, guildId),
+      { body: commands }
+    );
+  }
+
+  console.log('모든 서버 명령어 등록 완료!');
+});
+
+client.on('messageCreate', async message => {
+  try {
+    if (!message.guild || message.author.bot) return;
+
+    const guildId = message.guild.id;
+    const channelId = message.channel.id;
+
+    const data = loadData();
+    const notice = data.notices?.[guildId]?.[channelId];
+    if (!notice) return;
+
+    notice.count = (notice.count || 0) + 1;
+
+    if (notice.count < NOTICE_REFRESH_COUNT) {
+      data.notices[guildId][channelId] = notice;
+      saveData(data);
+      return;
+    }
+
+    data.notices[guildId][channelId] = notice;
+    saveData(data);
+
+    await repostNotice(guildId, channelId);
+  } catch (error) {
+    console.error('상시공지 재생성 오류:', error);
+  }
 });
 
 client.on('interactionCreate', async interaction => {
-  if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === '공대분배정산') {
-      const auctionAmounts = parseMoneyList(interaction.options.getString('경매장수령금액'));
-      const scissorAmounts = parseMoneyList(interaction.options.getString('가위값'));
-      const buyerAmounts = parseMoneyList(interaction.options.getString('공대원구매금액'));
-      const discount = interaction.options.getNumber('공대원할인율');
-      const people = interaction.options.getInteger('인원수');
+  try {
+    if (interaction.isChatInputCommand()) {
+      if (interaction.commandName === '상시공지설정') {
+        const content = interaction.options.getString('내용');
+        const guildId = interaction.guildId;
+        const channelId = interaction.channelId;
 
-      const auctionTotal = auctionAmounts.reduce((a, b) => a + b, 0);
-      const scissorTotal = scissorAmounts.reduce((a, b) => a + b, 0);
-      const buyerRawTotal = buyerAmounts.reduce((a, b) => a + b, 0);
-      const buyerFinalTotal = Math.floor(buyerRawTotal * (100 - discount) / 100);
+        const data = loadData();
+        if (!data.notices) data.notices = {};
+        if (!data.notices[guildId]) data.notices[guildId] = {};
 
-      const totalPool = auctionTotal - scissorTotal + buyerFinalTotal;
-      const perPersonShare = Math.floor(totalPool / people);
-      const sendCount = people - 1;
-      const parcelFeePerSend = getParcelFee(perPersonShare);
-      const totalParcelFee = parcelFeePerSend * sendCount;
-      const totalSendBudget = perPersonShare * sendCount;
-      const receivePerMember = sendCount > 0
-        ? Math.floor((totalSendBudget - totalParcelFee) / sendCount)
-        : 0;
+        const oldNotice = data.notices[guildId][channelId];
 
-      await interaction.reply(
-        `💰 공대 분배 정산 결과\n\n` +
-        `경매장 수령금액 합계: ${formatMesos(auctionTotal)} 메소\n` +
-        `가위값 차감: -${formatMesos(scissorTotal)} 메소\n` +
-        `공대원 구매금액: ${formatMesos(buyerRawTotal)} 메소\n` +
-        `공대원 할인율: ${discount}%\n` +
-        `할인 적용 구매금액: ${formatMesos(buyerFinalTotal)} 메소\n\n` +
-        `총 정산금: ${formatMesos(totalPool)} 메소\n` +
-        `분배 인원: ${people}명\n\n` +
-        `1인당 기본 분배금: ${formatMesos(perPersonShare)} 메소\n` +
-        `공대장 몫: ${formatMesos(perPersonShare)} 메소\n` +
-        `택배 발송 대상: ${sendCount}명\n` +
-        `1회 택배비: ${formatMesos(parcelFeePerSend)} 메소\n` +
-        `총 택배비: ${formatMesos(totalParcelFee)} 메소\n` +
-        `공대원이 실제 받는 금액: ${formatMesos(receivePerMember)} 메소`
-      );
-      return;
-    }
+        if (oldNotice?.messageId) {
+          const oldMsg = await interaction.channel.messages.fetch(oldNotice.messageId).catch(() => null);
+          if (oldMsg) await oldMsg.delete().catch(() => {});
+        }
 
-    if (interaction.commandName !== '모집생성') return;
+        const msg = await interaction.channel.send(content);
 
-    const raidId = `${Date.now()}`;
-    const raid = {
-      id: raidId,
-      boss: interaction.options.getString('보스'),
-      date: interaction.options.getString('날짜'),
-      time: interaction.options.getString('시간'),
-      limit: interaction.options.getInteger('정원'),
-      messageId: null,
-      channelId: interaction.channelId,
-      createdBy: interaction.user.id,
-      members: [],
-      parties: {
-        party1: [],
-        party2: [],
-        party3: []
-      }
-    };
+        data.notices[guildId][channelId] = {
+          content,
+          messageId: msg.id,
+          count: 0
+        };
 
-    await interaction.reply({
-      embeds: [makeEmbed(raid)],
-      components: [makeButtons(raidId)]
-    });
+        saveData(data);
 
-    const message = await interaction.fetchReply();
-    raid.messageId = message.id;
-
-    const data = loadData();
-    data.raids[raidId] = raid;
-    saveData(data);
-    return;
-  }
-
-  if (interaction.isButton()) {
-    const [action, raidId] = interaction.customId.split(':');
-    const data = loadData();
-
-    let raid = data.raids[raidId];
-
-    if (!raid) {
-      raid = restoreRaidFromMessage(interaction, raidId);
-      if (!raid) {
-        await interaction.reply({ content: '모집글 정보를 찾을 수 없어. 다시 생성해줘.', ephemeral: true });
-        return;
-      }
-      data.raids[raidId] = raid;
-      saveData(data);
-    }
-
-    if (action === 'join') {
-      const modal = new ModalBuilder()
-        .setCustomId(`modal_join:${raidId}`)
-        .setTitle(`${raid.boss} 참여신청`);
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId('nickname').setLabel('닉네임').setStyle(TextInputStyle.Short).setRequired(true)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId('job').setLabel('직업').setStyle(TextInputStyle.Short).setRequired(true)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId('level').setLabel('레벨').setStyle(TextInputStyle.Short).setRequired(true)
-        )
-      );
-
-      await interaction.showModal(modal);
-      return;
-    }
-
-    if (action === 'cancel') {
-      const index = raid.members.findIndex(m => m.userId === interaction.user.id);
-      if (index === -1) {
-        await interaction.reply({ content: '신청 내역이 없어.', ephemeral: true });
+        await interaction.reply({
+          content: '✅ 이 채널 상시공지 설정 완료! 채팅 10개마다 다시 올라와.',
+          ephemeral: true
+        });
         return;
       }
 
-      raid.members.splice(index, 1);
-      data.raids[raidId] = raid;
-      saveData(data);
+      if (interaction.commandName === '상시공지삭제') {
+        const guildId = interaction.guildId;
+        const channelId = interaction.channelId;
 
-      await interaction.message.edit({ embeds: [makeEmbed(raid)], components: [makeButtons(raidId)] });
-      await interaction.reply({ content: '✅ 신청 취소 완료', ephemeral: true });
-      return;
-    }
+        const data = loadData();
+        const notice = data.notices?.[guildId]?.[channelId];
 
-    if (action === 'list') {
-      const list = raid.members.length
-        ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
-        : '아직 신청자가 없습니다.';
+        if (!notice) {
+          await interaction.reply({
+            content: '이 채널에는 설정된 상시공지가 없어.',
+            ephemeral: true
+          });
+          return;
+        }
+
+        if (notice.messageId) {
+          const oldMsg = await interaction.channel.messages.fetch(notice.messageId).catch(() => null);
+          if (oldMsg) await oldMsg.delete().catch(() => {});
+        }
+
+        delete data.notices[guildId][channelId];
+        saveData(data);
+
+        await interaction.reply({
+          content: '✅ 이 채널 상시공지 삭제 완료!',
+          ephemeral: true
+        });
+        return;
+      }
+
+      if (interaction.commandName === '공대분배정산') {
+        const auctionAmounts = parseMoneyList(interaction.options.getString('경매장수령금액'));
+        const scissorAmounts = parseMoneyList(interaction.options.getString('가위값'));
+        const buyerAmounts = parseMoneyList(interaction.options.getString('공대원구매금액'));
+        const discount = interaction.options.getNumber('공대원할인율');
+        const people = interaction.options.getInteger('인원수');
+
+        const auctionTotal = auctionAmounts.reduce((a, b) => a + b, 0);
+        const scissorTotal = scissorAmounts.reduce((a, b) => a + b, 0);
+        const buyerRawTotal = buyerAmounts.reduce((a, b) => a + b, 0);
+        const buyerFinalTotal = Math.floor(buyerRawTotal * (100 - discount) / 100);
+
+        const totalPool = auctionTotal - scissorTotal + buyerFinalTotal;
+        const perPersonShare = Math.floor(totalPool / people);
+        const sendCount = people - 1;
+        const parcelFeePerSend = getParcelFee(perPersonShare);
+        const totalParcelFee = parcelFeePerSend * sendCount;
+        const totalSendBudget = perPersonShare * sendCount;
+        const receivePerMember = sendCount > 0
+          ? Math.floor((totalSendBudget - totalParcelFee) / sendCount)
+          : 0;
+
+        await interaction.reply(
+          `💰 공대 분배 정산 결과\n\n` +
+          `경매장 수령금액 합계: ${formatMesos(auctionTotal)} 메소\n` +
+          `가위값 차감: -${formatMesos(scissorTotal)} 메소\n` +
+          `공대원 구매금액: ${formatMesos(buyerRawTotal)} 메소\n` +
+          `공대원 할인율: ${discount}%\n` +
+          `할인 적용 구매금액: ${formatMesos(buyerFinalTotal)} 메소\n\n` +
+          `총 정산금: ${formatMesos(totalPool)} 메소\n` +
+          `분배 인원: ${people}명\n\n` +
+          `1인당 기본 분배금: ${formatMesos(perPersonShare)} 메소\n` +
+          `공대장 몫: ${formatMesos(perPersonShare)} 메소\n` +
+          `택배 발송 대상: ${sendCount}명\n` +
+          `1회 택배비: ${formatMesos(parcelFeePerSend)} 메소\n` +
+          `총 택배비: ${formatMesos(totalParcelFee)} 메소\n` +
+          `공대원이 실제 받는 금액: ${formatMesos(receivePerMember)} 메소`
+        );
+        return;
+      }
+
+      if (interaction.commandName !== '모집생성') return;
+
+      const raidId = `${Date.now()}`;
+      const raid = {
+        id: raidId,
+        boss: interaction.options.getString('보스'),
+        date: interaction.options.getString('날짜'),
+        time: interaction.options.getString('시간'),
+        limit: interaction.options.getInteger('정원'),
+        messageId: null,
+        channelId: interaction.channelId,
+        createdBy: interaction.user.id,
+        members: [],
+        parties: {
+          party1: [],
+          party2: [],
+          party3: []
+        }
+      };
 
       await interaction.reply({
-        content: `📋 ${raid.boss} 신청 명단\n\n${list}\n\n총 ${raid.members.length}명`,
-        ephemeral: true
+        embeds: [makeEmbed(raid)],
+        components: [makeButtons(raidId)]
       });
-      return;
-    }
 
-    if (action === 'party') {
-      if (interaction.user.id !== raid.createdBy && raid.createdBy !== '') {
-        await interaction.reply({
-          content: '공대장만 사용할 수 있어.',
-          ephemeral: true
-        });
-        return;
-      }
+      const message = await interaction.fetchReply();
+      raid.messageId = message.id;
 
-      if (!raid.members.length) {
-        await interaction.reply({
-          content: '아직 신청자가 없어서 공대편성을 할 수 없어.',
-          ephemeral: true
-        });
-        return;
-      }
-
-      const modal = new ModalBuilder()
-        .setCustomId(`party_modal:${raidId}`)
-        .setTitle(`${raid.boss} 공대편성`);
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('party1')
-            .setLabel('1공대 닉네임, 쉼표로 구분')
-            .setStyle(TextInputStyle.Paragraph)
-            .setRequired(false)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('party2')
-            .setLabel('2공대 닉네임, 쉼표로 구분')
-            .setStyle(TextInputStyle.Paragraph)
-            .setRequired(false)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('party3')
-            .setLabel('3공대 닉네임, 쉼표로 구분')
-            .setStyle(TextInputStyle.Paragraph)
-            .setRequired(false)
-        )
-      );
-
-      await interaction.showModal(modal);
-      return;
-    }
-  }
-
-  if (interaction.isModalSubmit()) {
-    const [action, raidId] = interaction.customId.split(':');
-
-    if (action === 'party_modal') {
       const data = loadData();
-      const raid = data.raids[raidId];
-
-      if (!raid) {
-        await interaction.reply({
-          content: '모집글 정보를 찾을 수 없어. 다시 생성해줘.',
-          ephemeral: true
-        });
-        return;
-      }
-
-      const party1 = pickMembersByName(raid, parseNames(interaction.fields.getTextInputValue('party1')));
-      const party2 = pickMembersByName(raid, parseNames(interaction.fields.getTextInputValue('party2')));
-      const party3 = pickMembersByName(raid, parseNames(interaction.fields.getTextInputValue('party3')));
-const allPartyMembers = [...party1, ...party2, ...party3];
-
-if (!data.contribution) data.contribution = {};
-
-for (const m of allPartyMembers) {
-  if (!data.contribution[m.nickname]) {
-    data.contribution[m.nickname] = {
-      count: 0,
-      job: m.job,
-      level: m.level
-    };
-  }
-
-  data.contribution[m.nickname].count += 1;
-  data.contribution[m.nickname].job = m.job;
-  data.contribution[m.nickname].level = m.level;
-}
-      raid.parties = { party1, party2, party3 };
       data.raids[raidId] = raid;
       saveData(data);
+      return;
+    }
 
-      await interaction.reply({
-        content:
+    if (interaction.isButton()) {
+      const [action, raidId] = interaction.customId.split(':');
+      const data = loadData();
+
+      let raid = data.raids[raidId];
+
+      if (!raid) {
+        raid = restoreRaidFromMessage(interaction, raidId);
+        if (!raid) {
+          await interaction.reply({ content: '모집글 정보를 찾을 수 없어. 다시 생성해줘.', ephemeral: true });
+          return;
+        }
+        data.raids[raidId] = raid;
+        saveData(data);
+      }
+
+      if (action === 'join') {
+        const modal = new ModalBuilder()
+          .setCustomId(`modal_join:${raidId}`)
+          .setTitle(`${raid.boss} 참여신청`);
+
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('nickname').setLabel('닉네임').setStyle(TextInputStyle.Short).setRequired(true)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('job').setLabel('직업').setStyle(TextInputStyle.Short).setRequired(true)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('level').setLabel('레벨').setStyle(TextInputStyle.Short).setRequired(true)
+          )
+        );
+
+        await interaction.showModal(modal);
+        return;
+      }
+
+      if (action === 'cancel') {
+        const index = raid.members.findIndex(m => m.userId === interaction.user.id);
+        if (index === -1) {
+          await interaction.reply({ content: '신청 내역이 없어.', ephemeral: true });
+          return;
+        }
+
+        raid.members.splice(index, 1);
+        data.raids[raidId] = raid;
+        saveData(data);
+
+        await interaction.message.edit({ embeds: [makeEmbed(raid)], components: [makeButtons(raidId)] });
+        await interaction.reply({ content: '✅ 신청 취소 완료', ephemeral: true });
+        return;
+      }
+
+      if (action === 'list') {
+        const list = raid.members.length
+          ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
+          : '아직 신청자가 없습니다.';
+
+        await interaction.reply({
+          content: `📋 ${raid.boss} 신청 명단\n\n${list}\n\n총 ${raid.members.length}명`,
+          ephemeral: true
+        });
+        return;
+      }
+
+      if (action === 'party') {
+        if (interaction.user.id !== raid.createdBy && raid.createdBy !== '') {
+          await interaction.reply({
+            content: '공대장만 사용할 수 있어.',
+            ephemeral: true
+          });
+          return;
+        }
+
+        if (!raid.members.length) {
+          await interaction.reply({
+            content: '아직 신청자가 없어서 공대편성을 할 수 없어.',
+            ephemeral: true
+          });
+          return;
+        }
+
+        const modal = new ModalBuilder()
+          .setCustomId(`party_modal:${raidId}`)
+          .setTitle(`${raid.boss} 공대편성`);
+
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('party1')
+              .setLabel('1공대 닉네임, 쉼표로 구분')
+              .setStyle(TextInputStyle.Paragraph)
+              .setRequired(false)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('party2')
+              .setLabel('2공대 닉네임, 쉼표로 구분')
+              .setStyle(TextInputStyle.Paragraph)
+              .setRequired(false)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('party3')
+              .setLabel('3공대 닉네임, 쉼표로 구분')
+              .setStyle(TextInputStyle.Paragraph)
+              .setRequired(false)
+          )
+        );
+
+        await interaction.showModal(modal);
+        return;
+      }
+    }
+
+    if (interaction.isModalSubmit()) {
+      const [action, raidId] = interaction.customId.split(':');
+
+      if (action === 'party_modal') {
+        const data = loadData();
+        const raid = data.raids[raidId];
+
+        if (!raid) {
+          await interaction.reply({
+            content: '모집글 정보를 찾을 수 없어. 다시 생성해줘.',
+            ephemeral: true
+          });
+          return;
+        }
+
+        const party1 = pickMembersByName(raid, parseNames(interaction.fields.getTextInputValue('party1')));
+        const party2 = pickMembersByName(raid, parseNames(interaction.fields.getTextInputValue('party2')));
+        const party3 = pickMembersByName(raid, parseNames(interaction.fields.getTextInputValue('party3')));
+        const allPartyMembers = [...party1, ...party2, ...party3];
+
+        if (!data.contribution) data.contribution = {};
+
+        for (const m of allPartyMembers) {
+          if (!data.contribution[m.nickname]) {
+            data.contribution[m.nickname] = {
+              count: 0,
+              job: m.job,
+              level: m.level
+            };
+          }
+
+          data.contribution[m.nickname].count += 1;
+          data.contribution[m.nickname].job = m.job;
+          data.contribution[m.nickname].level = m.level;
+        }
+
+        raid.parties = { party1, party2, party3 };
+        data.raids[raidId] = raid;
+        saveData(data);
+
+        await interaction.reply({
+          content:
 `📢 ${raid.boss} ${raid.date} ${raid.time} 공대 편성 결과
 
 ${partyText('🟥 1공대', party1)}
@@ -396,47 +541,58 @@ ${partyText('🟥 1공대', party1)}
 ${partyText('🟦 2공대', party2)}
 
 ${partyText('🟩 3공대', party3)}`,
-        ephemeral: false
-      });
-      return;
-    }
+          ephemeral: false
+        });
+        return;
+      }
 
-    if (action !== 'modal_join') return;
+      if (action !== 'modal_join') return;
 
-    const data = loadData();
-    const raid = data.raids[raidId];
+      const data = loadData();
+      const raid = data.raids[raidId];
 
-    if (!raid) {
-      await interaction.reply({ content: '모집글 정보를 찾을 수 없어. 다시 생성해줘.', ephemeral: true });
-      return;
-    }
+      if (!raid) {
+        await interaction.reply({ content: '모집글 정보를 찾을 수 없어. 다시 생성해줘.', ephemeral: true });
+        return;
+      }
 
-    const existing = raid.members.find(m => m.userId === interaction.user.id);
-    if (existing) {
+      const existing = raid.members.find(m => m.userId === interaction.user.id);
+      if (existing) {
+        await interaction.reply({
+          content: `이미 신청되어 있어.\n${existing.nickname} / ${existing.job} / ${existing.level}`,
+          ephemeral: true
+        });
+        return;
+      }
+
+      const nickname = interaction.fields.getTextInputValue('nickname');
+      const job = interaction.fields.getTextInputValue('job');
+      const level = interaction.fields.getTextInputValue('level');
+
+      raid.members.push({ userId: interaction.user.id, nickname, job, level });
+      data.raids[raidId] = raid;
+      saveData(data);
+
+      const channel = await client.channels.fetch(raid.channelId);
+      const msg = await channel.messages.fetch(raid.messageId);
+
+      await msg.edit({ embeds: [makeEmbed(raid)], components: [makeButtons(raidId)] });
+
       await interaction.reply({
-        content: `이미 신청되어 있어.\n${existing.nickname} / ${existing.job} / ${existing.level}`,
+        content: `✅ 신청 완료\n${nickname} / ${job} / ${level}`,
         ephemeral: true
       });
-      return;
     }
+  } catch (error) {
+    console.error(error);
 
-    const nickname = interaction.fields.getTextInputValue('nickname');
-    const job = interaction.fields.getTextInputValue('job');
-    const level = interaction.fields.getTextInputValue('level');
-
-    raid.members.push({ userId: interaction.user.id, nickname, job, level });
-    data.raids[raidId] = raid;
-    saveData(data);
-
-    const channel = await client.channels.fetch(raid.channelId);
-    const msg = await channel.messages.fetch(raid.messageId);
-
-    await msg.edit({ embeds: [makeEmbed(raid)], components: [makeButtons(raidId)] });
-
-    await interaction.reply({
-      content: `✅ 신청 완료\n${nickname} / ${job} / ${level}`,
-      ephemeral: true
-    });
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply('오류가 발생했어. Railway 로그 확인 필요!');
+      } else {
+        await interaction.reply({ content: '오류가 발생했어. Railway 로그 확인 필요!', ephemeral: true });
+      }
+    } catch {}
   }
 });
 
