@@ -63,18 +63,8 @@ function formatMesos(num) {
   return Math.floor(num).toLocaleString('ko-KR');
 }
 
-function getParcelRate(amount) {
-  if (amount >= 100000000) return 0.06;
-  if (amount >= 25000000) return 0.05;
-  if (amount >= 10000000) return 0.04;
-  if (amount >= 5000000) return 0.03;
-  if (amount >= 1000000) return 0.018;
-  if (amount >= 100000) return 0.008;
-  return 0;
-}
-
 function getParcelFee(amount) {
-  return 10000 + Math.floor(amount * getParcelRate(amount));
+    return 10000 + Math.floor(amount * 0.04);
 }
 
 function restoreRaidFromMessage(interaction, raidId) {
