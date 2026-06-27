@@ -341,12 +341,11 @@ const msg = await interaction.channel.send({ embeds: [embed] });
           `할인 적용 구매금액: ${formatMesos(buyerFinalTotal)} 메소\n\n` +
           `총 정산금: ${formatMesos(totalPool)} 메소\n` +
           `분배 인원: ${people}명\n\n` +
-          `1인당 기본 분배금: ${formatMesos(perPersonShare)} 메소\n` +
-          `공대장 몫: ${formatMesos(perPersonShare)} 메소\n` +
+          `1인당 분배금: ${formatMesos(perPersonShare)} 메소\n` +
           `택배 발송 대상: ${sendCount}명\n` +
           `1회 택배비: ${formatMesos(parcelFeePerSend)} 메소\n` +
           `총 택배비: ${formatMesos(totalParcelFee)} 메소\n` +
-          `공대원이 실제 받는 금액: ${formatMesos(receivePerMember)} 메소`
+          `실수령액: ${formatMesos(receivePerMember)} 메소`
         );
         return;
       }
