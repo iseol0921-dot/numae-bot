@@ -214,8 +214,8 @@ client.once('ready', async () => {
 
 client.on('messageCreate', async message => {
   try {
-    if (!message.guild || message.author.bot) return;
-
+  if (!message.guild) return;
+  if (message.author.id === client.user.id) return;
     const guildId = message.guild.id;
     const channelId = message.channel.id;
 
