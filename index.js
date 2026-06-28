@@ -537,23 +537,26 @@ const msg = await interaction.channel.send({ embeds: [embed] });
 
        raid.parties = raid.parties || { party1: [], party2: [], party3: [] };
 
+raid.parties = raid.parties || { party1: [], party2: [], party3: [] };
+
 if (party1.length) raid.parties.party1 = party1;
 if (party2.length) raid.parties.party2 = party2;
 if (party3.length) raid.parties.party3 = party3;
-        data.raids[raidId] = raid;
-        saveData(data);
 
-        await interaction.reply({
-          content:
+data.raids[raidId] = raid;
+saveData(data);
+
+await interaction.reply({
+  content:
 `📢 ${raid.boss} ${raid.date} ${raid.time} 공대 편성 결과
 
-${partyText('🟥 1공대', party1)}
+${partyText('🟥 1공대', raid.parties.party1)}
 
-${partyText('🟦 2공대', party2)}
+${partyText('🟦 2공대', raid.parties.party2)}
 
-${partyText('🟩 3공대', party3)}`,
-          ephemeral: false
-        });
+${partyText('🟩 3공대', raid.parties.party3)}`,
+  ephemeral: false
+});
         return;
       }
 
