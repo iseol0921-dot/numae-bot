@@ -595,7 +595,6 @@ if (existing && !isAdmin) {
         content: `✅ 신청 완료\n${nickname} / ${job} / ${level}`,
         ephemeral: true
       });
-    }
   } catch (error) {
     console.error(error);
 
