@@ -535,7 +535,11 @@ const msg = await interaction.channel.send({ embeds: [embed] });
           data.contribution[m.nickname].level = m.level;
         }
 
-        raid.parties = { party1, party2, party3 };
+       raid.parties = raid.parties || { party1: [], party2: [], party3: [] };
+
+if (party1.length) raid.parties.party1 = party1;
+if (party2.length) raid.parties.party2 = party2;
+if (party3.length) raid.parties.party3 = party3;
         data.raids[raidId] = raid;
         saveData(data);
 
