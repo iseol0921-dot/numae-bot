@@ -563,13 +563,19 @@ ${partyText('🟩 3공대', party3)}`,
         return;
       }
 
-      const existing = raid.members.find(m => m.userId === interaction.user.id);
-      if (existing) {
-        await interaction.reply({
-          content: `이미 신청되어 있어.\n${existing.nickname} / ${existing.job} / ${existing.level}`,
-          ephemeral: true
-        });
-        return;
+    const isAdmin = interaction.member.permissions.has('Administrator');
+
+const existing = raid.members.find(
+  m => m.userId === interaction.user.id
+);
+
+if (existing && !isAdmin) {
+  await interaction.reply({
+    content: `이미 신청되어 있어.\n${existing.nickname} / ${existing.job} / ${existing.level}`,
+    ephemeral: true
+  });
+  return;
+}
       }
 
       const nickname = interaction.fields.getTextInputValue('nickname');
