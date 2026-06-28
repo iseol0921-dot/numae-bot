@@ -593,10 +593,10 @@ if (existing && !isAdmin) {
       await interaction.reply({
         content: `✅ 신청 완료\n${nickname} / ${job} / ${level}`,
         ephemeral: true
-      });
+          });
+    }
   } catch (error) {
-    console.error(error);
-  }
+  
 
     try {
       if (interaction.deferred || interaction.replied) {
