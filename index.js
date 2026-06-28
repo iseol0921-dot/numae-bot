@@ -576,7 +576,6 @@ if (existing && !isAdmin) {
   });
   return;
 }
-      }
 
       const nickname = interaction.fields.getTextInputValue('nickname');
       const job = interaction.fields.getTextInputValue('job');
