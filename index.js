@@ -596,6 +596,7 @@ if (existing && !isAdmin) {
       });
   } catch (error) {
     console.error(error);
+  }
 
     try {
       if (interaction.deferred || interaction.replied) {
