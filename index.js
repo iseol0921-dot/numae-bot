@@ -58,10 +58,10 @@ return new EmbedBuilder()
 
 function makeButtons(raidId) {
   return  ActionRowBuilder().addComponents(
-     ButtonBuilder().setCustomId(`join:${raidId}`).setLabel('참여신청').setStyle(ButtonStyle.Primary),
-     ButtonBuilder().setCustomId(`cancel:${raidId}`).setLabel('신청취소').setStyle(ButtonStyle.Danger),
-     ButtonBuilder().setCustomId(`list:${raidId}`).setLabel('명단확인').setStyle(ButtonStyle.Success),
-     ButtonBuilder().setCustomId(`party:${raidId}`).setLabel('공대편성').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(`join:${raidId}`).setLabel('참여신청').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`cancel:${raidId}`).setLabel('신청취소').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`list:${raidId}`).setLabel('명단확인').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`party:${raidId}`).setLabel('공대편성').setStyle(ButtonStyle.Secondary)
   );
 }
 
