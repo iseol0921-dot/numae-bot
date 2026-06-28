@@ -50,10 +50,10 @@ function makeEmbed(raid) {
     ? raid.members.map((m, i) => `${i + 1}. ${m.nickname} / ${m.job} / ${m.level}`).join('\n')
     : '아직 신청자가 없습니다.';
 
-  return  EmbedBuilder()
-    .setTitle(`${getBossEmoji(raid.boss)} ${raid.boss} ${raid.date} ${raid.time}`)
-    .setDescription(`현재 신청 인원: **${raid.members.length} / ${raid.limit}명**\n\n${list}`)
-    .setColor(0x7c5cff);
+return new EmbedBuilder()
+  .setTitle(`${getBossEmoji(raid.boss)} ${raid.boss} ${raid.date} ${raid.time}`)
+  .setDescription(`현재 신청 인원: **${raid.members.length} / ${raid.limit}명**\n\n${list}`)
+  .setColor(0x7c5cff);
 }
 
 function makeButtons(raidId) {
