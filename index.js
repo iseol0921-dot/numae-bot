@@ -11,7 +11,7 @@ const SERVER_IDS = [
 ];
 
 const DATA_FILE = './data.json';
-const NOTICE_REFRESH_COUNT = 10;
+const NOTICE_REFRESH_COUNT = 5;
 
 const client = new Client({
   intents: [
